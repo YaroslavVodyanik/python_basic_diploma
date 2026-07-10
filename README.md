@@ -28,8 +28,7 @@ Telegram-бот для поиска информации о фильмах и с
 - python-telegram-bot
 - requests
 - python-dotenv
-- Peewee
-- SQLite
+- Kinopoisk API
 
 ## Установка и запуск
 
