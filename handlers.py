@@ -1,5 +1,13 @@
 from telegram import Update
 from telegram.ext import CallbackContext
+from requests import RequestException
+from api import (
+    format_movies,
+    get_high_budget_movies,
+    get_low_budget_movies,
+    get_movies_by_rating,
+    search_movie_by_name,
+)
 
 
 history_data = []
@@ -20,6 +28,26 @@ async def help_command(update: Update, context: CallbackContext):
     await update.message.reply_text(help_text)
 
 
+async def _reply_with_movies(update: Update, movies):
+    text = format_movies(movies)
+    if len(text) <= 4000:
+        await update.message.reply_text(text)
+        return
+
+    for part_start in range(0, len(text), 4000):
+        await update.message.reply_text(text[part_start:part_start + 4000])
+
+
+async def _reply_with_error(update: Update, error):
+    if isinstance(error, RuntimeError):
+        await update.message.reply_text(str(error))
+        return
+
+    await update.message.reply_text(
+        "Не получилось получить данные о фильмах. Проверьте API-ключ и попробуйте позже."
+    )
+
+
 async def movie_search(update: Update, context: CallbackContext):
     args = context.args
     name = ' '.join(args) if args else None
@@ -29,7 +57,13 @@ async def movie_search(update: Update, context: CallbackContext):
 
     history_data.append(f"Поиск по названию: {name}")
 
-    await update.message.reply_text(f"Поиск фильма: {name}")
+    try:
+        movies = search_movie_by_name(name)
+    except (RuntimeError, RequestException) as error:
+        await _reply_with_error(update, error)
+        return
+
+    await _reply_with_movies(update, movies)
 
 
 async def movie_by_rating(update: Update, context: CallbackContext):
@@ -45,19 +79,37 @@ async def movie_by_rating(update: Update, context: CallbackContext):
 
     history_data.append(f"Поиск фильмов с рейтингом выше {rating_threshold}")
 
-    await update.message.reply_text(f"Поиск фильмов с рейтингом выше {rating_threshold} (пример).")
+    try:
+        movies = get_movies_by_rating(rating_threshold)
+    except (RuntimeError, RequestException) as error:
+        await _reply_with_error(update, error)
+        return
+
+    await _reply_with_movies(update, movies)
 
 
 async def low_budget_movie(update: Update, context: CallbackContext):
     history_data.append("Поиск фильмов с низким бюджетом")
 
-    await update.message.reply_text("Поиск фильмов с низким бюджетом (пример).")
+    try:
+        movies = get_low_budget_movies()
+    except (RuntimeError, RequestException) as error:
+        await _reply_with_error(update, error)
+        return
+
+    await _reply_with_movies(update, movies)
 
 
 async def high_budget_movie(update: Update, context: CallbackContext):
     history_data.append("Поиск фильмов с высоким бюджетом")
 
-    await update.message.reply_text("Поиск фильмов с высоким бюджетом (пример).")
+    try:
+        movies = get_high_budget_movies()
+    except (RuntimeError, RequestException) as error:
+        await _reply_with_error(update, error)
+        return
+
+    await _reply_with_movies(update, movies)
 
 
 async def show_history(update: Update, context: CallbackContext):
